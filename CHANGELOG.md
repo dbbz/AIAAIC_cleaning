@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Added User-Agent header to CSV download to prevent 400 Bad Request errors from Google Sheets
+- **Fixed Google Sheets 400 error**: Switched to curl subprocess for CSV download to handle Google's cross-origin redirects that strip headers in httpx
 - **Fixed missing source links**: Now extracts URLs from plain text (not just `<a>` tags) - many AIAAIC pages list source URLs as underlined `<span>` elements
 
 ## [0.1.0] - 2024-12-11
