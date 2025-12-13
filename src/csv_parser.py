@@ -47,14 +47,19 @@ def split_field(value: str) -> list[str]:
 
 
 def download_csv(url: str = CSV_URL) -> str:
-    """Download CSV content from Google Sheets."""
+    """Download CSV content from Google Sheets.
+
+    Uses HTTP/2 client with follow_redirects to handle Google's redirect chain.
+    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/csv,text/plain,*/*",
     }
-    response = httpx.get(url, headers=headers, follow_redirects=True, timeout=60.0)
-    response.raise_for_status()
-    return response.text
+
+    with httpx.Client(http2=True, follow_redirects=True, timeout=60.0) as client:
+        response = client.get(url, headers=headers)
+        response.raise_for_status()
+        return response.text
 
 
 def parse_csv_row(row: list[str]) -> AIAAICIncident | None:
