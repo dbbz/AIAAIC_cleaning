@@ -1,0 +1,18 @@
+[project]
+name = "aiaaic-scraper"
+version = "0.1.0"
+description = "Scraper for the AIAAIC AI incidents database"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "httpx>=0.28.1",
+    "lxml>=6.0.2",
+    "markdownify>=1.2.2",
+    "pandas>=2.2.0",
+    "pydantic>=2.12.5",
+    "rapidfuzz>=3.10.0",
+    "rich>=14.2.0",
+    "streamlit>=1.40.0",
+    "watchdog>=6.0.0",
+]
