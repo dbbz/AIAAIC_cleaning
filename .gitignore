@@ -9,5 +9,5 @@ wheels/
 # Virtual environments
 .venv
 
-# Scraped data (regenerate with: uv run scrape.py)
-data/
+# Scraping errors (can be regenerated)
+data/errors.jsonl
