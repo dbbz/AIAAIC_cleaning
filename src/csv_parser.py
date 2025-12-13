@@ -2,6 +2,7 @@
 
 import csv
 import re
+import subprocess
 from io import StringIO
 from typing import Iterator
 
@@ -49,17 +50,21 @@ def split_field(value: str) -> list[str]:
 def download_csv(url: str = CSV_URL) -> str:
     """Download CSV content from Google Sheets.
 
-    Uses HTTP/2 client with follow_redirects to handle Google's redirect chain.
+    Uses curl subprocess as httpx has issues with Google's cross-origin redirects.
     """
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/csv,text/plain,*/*",
-    }
-
-    with httpx.Client(http2=True, follow_redirects=True, timeout=60.0) as client:
-        response = client.get(url, headers=headers)
-        response.raise_for_status()
-        return response.text
+    result = subprocess.run(
+        [
+            "curl", "-sL",
+            "-H", "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+            url
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"curl failed with code {result.returncode}: {result.stderr}")
+    return result.stdout
 
 
 def parse_csv_row(row: list[str]) -> AIAAICIncident | None:
