@@ -8,7 +8,8 @@ This is the **AIAAIC Database Scraper** - a Python tool to extract and structure
 
 - **Python 3.14+** with type hints
 - **uv** for dependency management (not pip/requirements.txt)
-- **httpx** for async HTTP requests
+- **httpx** for async HTTP requests (detail page scraping)
+- **curl** (subprocess) for CSV download (httpx has issues with Google's cross-origin redirects)
 - **BeautifulSoup + lxml** for HTML parsing
 - **Pydantic** for data validation
 - **Rich** for terminal output
@@ -55,12 +56,18 @@ uv run streamlit run app.py
 
 ## Data Flow
 
-1. CSV downloaded from Google Sheets → parsed into partial `AIAAICIncident` objects
-2. For each incident with a detail URL → scrape the page
+1. CSV downloaded from Google Sheets (via curl) → parsed into partial `AIAAICIncident` objects
+2. For each incident with a detail URL → scrape the page (via httpx)
 3. Merge CSV data + page data → validate with Pydantic
 4. Append to `data/aiaaic_incidents.jsonl`
 
 ## Important Design Decisions
+
+### CSV Download (Google Sheets)
+
+The CSV is downloaded using **curl subprocess** instead of httpx. This is because Google Sheets uses cross-origin redirects (docs.google.com → googleusercontent.com) that strip headers in httpx, causing 400 errors. curl handles this correctly.
+
+See `src/csv_parser.py` `download_csv()` function.
 
 ### Page Scraping (CRITICAL)
 
