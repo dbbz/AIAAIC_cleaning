@@ -8,6 +8,3 @@ wheels/
 
 # Virtual environments
 .venv
-
-# Scraping errors (can be regenerated)
-data/errors.jsonl
