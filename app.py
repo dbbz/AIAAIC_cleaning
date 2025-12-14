@@ -300,7 +300,7 @@ def page_dashboard():
                 tooltip=["Range", "Count", "Quality"]
             ).properties(height=500)
 
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, width='stretch')
 
         with col2:
             st.metric("Median", f"{int(with_desc.median()):,} chars")
@@ -770,11 +770,11 @@ def page_inspect():
 
     nav1, nav2, nav3, nav4, nav5 = st.columns([1, 1, 2, 2, 1])
     with nav1:
-        if st.button("⏮ First", use_container_width=True):
+        if st.button("⏮ First", width='stretch'):
             st.session_state.inspect_idx = 0
             st.rerun()
     with nav2:
-        if st.button("◀ Prev", use_container_width=True, disabled=st.session_state.inspect_idx == 0):
+        if st.button("◀ Prev", width='stretch', disabled=st.session_state.inspect_idx == 0):
             st.session_state.inspect_idx -= 1
             st.rerun()
     with nav3:
@@ -785,7 +785,7 @@ def page_inspect():
             st.session_state.inspect_idx = jump - 1
             st.rerun()
     with nav5:
-        if st.button("Next ▶", use_container_width=True, disabled=st.session_state.inspect_idx >= len(filtered) - 1):
+        if st.button("Next ▶", width='stretch', disabled=st.session_state.inspect_idx >= len(filtered) - 1):
             st.session_state.inspect_idx += 1
             st.rerun()
 
@@ -860,7 +860,7 @@ def page_inspect():
         st.markdown("### Original Page")
         url = row.get("detail_page_url")
         if url:
-            st.link_button("Open in new tab", url, use_container_width=True)
+            st.link_button("Open in new tab", url, width='stretch')
 
             with st.spinner("Loading page content..."):
                 content = fetch_page_content(url)
@@ -934,7 +934,7 @@ def page_consistency():
                 })
 
         dup_df = pd.DataFrame(dup_data)
-        st.dataframe(dup_df, hide_index=True, height=400, use_container_width=True)
+        st.dataframe(dup_df, hide_index=True, height=400, width='stretch')
 
         # Deduplication action
         st.divider()
@@ -950,7 +950,7 @@ def page_consistency():
             """)
 
         with col2:
-            if st.button("Deduplicate Now", type="primary", use_container_width=True):
+            if st.button("Deduplicate Now", type="primary", width='stretch'):
                 with st.spinner("Removing duplicates..."):
                     kept, removed = deduplicate_jsonl(DATA_PATH)
                     # Clear cache to reload data
