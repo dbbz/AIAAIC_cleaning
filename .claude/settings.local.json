@@ -42,7 +42,8 @@
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap fetch upstream)",
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log HEAD..upstream/main --oneline)",
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log upstream/main --oneline -5)",
-      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nFix Streamlit deprecation warnings\n\nReplace `use_container_width=True` with `width=''stretch''` in all 7\noccurrences. The old parameter will be removed after 2025-12-31.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nFix Streamlit deprecation warnings\n\nReplace `use_container_width=True` with `width=''stretch''` in all 7\noccurrences. The old parameter will be removed after 2025-12-31.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(uv run python:*)"
     ]
   }
 }

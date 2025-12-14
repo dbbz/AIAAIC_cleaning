@@ -830,8 +830,9 @@ def page_inspect():
             for i, s in enumerate(sources, 1):
                 if isinstance(s, dict):
                     url = s.get("url", "")
-                    title = s.get("title") or f"Source {i}"
-                    st.markdown(f"{i}. [{title}]({url})")
+                    # Show URL (truncated if too long) for easier comparison
+                    display_url = url[:80] + "..." if len(url) > 80 else url
+                    st.markdown(f"{i}. [{display_url}]({url})")
         else:
             st.warning("No source links found")
 
