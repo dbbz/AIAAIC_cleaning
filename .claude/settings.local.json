@@ -12,7 +12,27 @@
       "Bash(ls:*)",
       "Bash(pkill:*)",
       "Bash(timeout 5 uv run:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: AIAAIC Database Scraper\n\nA comprehensive scraper for the AIAAIC (AI, Algorithmic, and Automation\nIncidents and Controversies) database with data quality tooling.\n\nFeatures:\n- CSV parsing from Google Sheets with 20+ fields\n- Async page scraping with configurable concurrency\n- Robust text-pattern extraction (handles Google Sites quirks)\n- Plain text URL extraction (not just <a> tags)\n- JSONL output format for resumability\n- Rich terminal UI with progress bars\n- Streamlit data quality inspector dashboard\n\nCLI commands:\n- scrape.py: Main scraper with --sample, --force, --retry-errors\n- --single <ID>: Inspect individual incidents\n- --incomplete / --rescrape-incomplete: Find and fix gaps\n- --errors: View failed scrapes\n- --export json/csv: Format conversion\n\nTech stack: Python 3.14+, uv, httpx, BeautifulSoup, Pydantic, Rich, Streamlit\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(grep:*)",
+      "Bash(git rm:*)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap status)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap diff --stat)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log --oneline -3)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap diff .gitignore README.md)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap add .gitignore README.md)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nFix README.md rendering and ignore .python-version\n\n- Fix corrupted Unicode box-drawing characters in Project Structure section\n  that prevented proper GitHub rendering\n- Add .python-version to .gitignore (uv manages Python version)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap add:*)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nEnhance data quality inspector with unified issue inspection\n\n- Add markdownify for converting fetched pages to markdown (replaces broken iframe)\n- Add has_typos() helper to detect known typos in issues field\n- Extend Inspect page with all issue filters: missing desc/sources/date,\n  no URL, not scraped, has typos, complete\n- Handle records without URLs gracefully in Inspect page\n- Add clickable rows to Gaps page with expandable detail panels\n- Add \"Has typos\" tab to Gaps page\n- Highlight typos with strikethrough and correction in metadata display\n- Move st.set_page_config to top of file (Streamlit requirement)\n- Add constants for cache TTL, page size, similarity threshold\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap diff --stat app.py)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap diff app.py)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap add app.py)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nAdd direct ID lookup in Inspect page\n\n- Add \"Jump to ID\" text input field next to the filter dropdown\n- Case-insensitive ID matching\n- If ID found in current filter, jumps directly to that record\n- If ID exists but not in current filter, shows warning to switch filters\n- If ID not found, shows error message\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap diff CHANGELOG.md README.md scrape.py src/page_scraper.py src/scraper.py src/utils.py)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap diff src/utils.py)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap add CHANGELOG.md README.md scrape.py src/page_scraper.py src/scraper.py src/utils.py)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nImprove description extraction and scraper performance\n\n- Extract full multi-paragraph descriptions with narrative sections\n  (What happened, Why it happened, What it means)\n- Add `remove_ids_from_jsonl()` utility to prevent duplicates when\n  using --retry-errors or --rescrape-incomplete\n- Increase default concurrency from 10 to 20 parallel requests\n- Fix --single mode TypeError with sync wrapper for page scraping\n- Add metadata field patterns to detect end of description content\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ]
   }
 }
