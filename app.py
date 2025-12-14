@@ -683,6 +683,13 @@ def page_inspect():
         "not scraped": "Not yet scraped",
         "has typos": "Has known typos",
         "complete": "Complete records",
+        # Description length buckets
+        "desc <100": "Description: Poor (<100 chars)",
+        "desc 100-250": "Description: Short (100-250)",
+        "desc 250-500": "Description: Fair (250-500)",
+        "desc 500-1k": "Description: Good (500-1k)",
+        "desc 1k-2k": "Description: Good (1k-2k)",
+        "desc >2k": "Description: Long (>2k)",
     }
 
     # Filter controls
@@ -697,6 +704,8 @@ def page_inspect():
         id_input = st.text_input("Jump to ID", placeholder="e.g. AIAAIC0001", label_visibility="visible")
 
     # Apply filter
+    desc_len = df["description"].apply(lambda x: len(x) if isinstance(x, str) else 0)
+
     if filter_opt == "missing description":
         filtered = df[~has_description(df)]
     elif filter_opt == "missing sources":
@@ -711,6 +720,19 @@ def page_inspect():
         filtered = df[has_typos(df)]
     elif filter_opt == "complete":
         filtered = df[is_complete(df)]
+    # Description length buckets
+    elif filter_opt == "desc <100":
+        filtered = df[(desc_len > 0) & (desc_len < 100)]
+    elif filter_opt == "desc 100-250":
+        filtered = df[(desc_len >= 100) & (desc_len < 250)]
+    elif filter_opt == "desc 250-500":
+        filtered = df[(desc_len >= 250) & (desc_len < 500)]
+    elif filter_opt == "desc 500-1k":
+        filtered = df[(desc_len >= 500) & (desc_len < 1000)]
+    elif filter_opt == "desc 1k-2k":
+        filtered = df[(desc_len >= 1000) & (desc_len < 2000)]
+    elif filter_opt == "desc >2k":
+        filtered = df[desc_len >= 2000]
     else:  # all
         filtered = df
 
