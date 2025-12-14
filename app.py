@@ -259,6 +259,64 @@ def page_dashboard():
         with col3:
             st.markdown(f"{pct}%")
 
+    st.divider()
+
+    # Description length distribution
+    st.subheader("Description Length Distribution")
+
+    # Compute description lengths
+    desc_lengths = df["description"].apply(lambda x: len(x) if isinstance(x, str) else 0)
+    with_desc = desc_lengths[desc_lengths > 0]
+
+    if len(with_desc) > 0:
+        import altair as alt
+
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            # Create histogram data with quality categories
+            bins = [0, 100, 250, 500, 1000, 2000, float("inf")]
+            labels = ["<100", "100-250", "250-500", "500-1k", "1k-2k", ">2k"]
+            quality = ["Poor", "Short", "Fair", "Good", "Good", "Long"]
+            colors = ["#e74c3c", "#f39c12", "#f1c40f", "#2ecc71", "#27ae60", "#3498db"]
+
+            binned = pd.cut(with_desc, bins=bins, labels=labels, right=False)
+            counts = binned.value_counts().reindex(labels, fill_value=0)
+
+            chart_data = pd.DataFrame({
+                "Range": labels,
+                "Count": counts.values,
+                "Quality": quality,
+                "Color": colors,
+            })
+
+            chart = alt.Chart(chart_data).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+                x=alt.X("Range:N", sort=labels, title="Character count", axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("Count:Q", title="Number of incidents"),
+                color=alt.Color("Quality:N",
+                    scale=alt.Scale(domain=["Poor", "Short", "Fair", "Good", "Long"],
+                                   range=["#e74c3c", "#f39c12", "#f1c40f", "#2ecc71", "#3498db"]),
+                    legend=alt.Legend(title="Quality", orient="bottom", direction="horizontal")),
+                tooltip=["Range", "Count", "Quality"]
+            ).properties(height=500)
+
+            st.altair_chart(chart, use_container_width=True)
+
+        with col2:
+            st.metric("Median", f"{int(with_desc.median()):,} chars")
+            st.metric("Mean", f"{int(with_desc.mean()):,} chars")
+            st.caption(f"Range: {int(with_desc.min()):,} - {int(with_desc.max()):,}")
+
+            # Quality breakdown
+            short = (with_desc < 100).sum()
+            good = ((with_desc >= 500) & (with_desc < 2000)).sum()
+            if short > 0:
+                st.error(f"{short} very short")
+            if good > 0:
+                st.success(f"{good} good length")
+    else:
+        st.info("No descriptions to analyze")
+
 
 def page_browse():
     """Browse - searchable table with pagination."""
