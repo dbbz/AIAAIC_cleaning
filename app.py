@@ -628,13 +628,15 @@ def page_inspect():
     }
 
     # Filter controls
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
         filter_opt = st.selectbox(
             "Filter by issue",
             options=list(filter_options.keys()),
             format_func=lambda x: filter_options[x],
         )
+    with col2:
+        id_input = st.text_input("Jump to ID", placeholder="e.g. AIAAIC0001", label_visibility="visible")
 
     # Apply filter
     if filter_opt == "missing description":
@@ -656,8 +658,23 @@ def page_inspect():
 
     filtered = filtered.reset_index(drop=True)
 
-    with col2:
+    with col3:
         st.metric("Matching", len(filtered))
+
+    # Handle ID lookup
+    if id_input:
+        id_input = id_input.strip().upper()
+        # Check if ID exists in filtered data
+        matches = filtered[filtered["aiaaic_id"].str.upper() == id_input]
+        if not matches.empty:
+            st.session_state.inspect_idx = matches.index[0]
+        else:
+            # Check if ID exists in full data
+            all_matches = df[df["aiaaic_id"].str.upper() == id_input]
+            if not all_matches.empty:
+                st.warning(f"ID '{id_input}' exists but doesn't match current filter. Switch to 'All records' to view it.")
+            else:
+                st.error(f"ID '{id_input}' not found")
 
     if filtered.empty:
         st.success("No records match this filter")
