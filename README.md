@@ -59,7 +59,7 @@ Options:
   --errors          List incidents that failed scraping
   --incomplete      List incidents with missing page data
   --rescrape-incomplete  Find and rescrape incomplete incidents
-  --concurrency N   Number of concurrent requests (default: 10)
+  --concurrency N   Number of concurrent requests (default: 20)
   --verbose, -v     Show detailed status for each incident
   --output, -o      Output file path (default: data/aiaaic_incidents.jsonl)
 ```
@@ -85,8 +85,8 @@ uv run scrape.py --export json
 # Export to CSV (flattened)
 uv run scrape.py --export csv
 
-# Higher concurrency for faster scraping
-uv run scrape.py --concurrency 20
+# Even higher concurrency for faster scraping
+uv run scrape.py --concurrency 50
 
 # List incidents without detail URLs (for manual investigation)
 uv run scrape.py --no-url

@@ -13,7 +13,7 @@ Usage:
     uv run scrape.py --errors           # List failed scrapes
     uv run scrape.py --incomplete       # List incidents with missing page data
     uv run scrape.py --rescrape-incomplete  # Find and rescrape incomplete
-    uv run scrape.py --concurrency 10   # Set concurrent requests (default: 10)
+    uv run scrape.py --concurrency 20   # Set concurrent requests (default: 20)
     uv run scrape.py --verbose          # Show detailed extraction info
 """
 
@@ -92,9 +92,9 @@ def main() -> int:
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=10,
+        default=20,
         metavar="N",
-        help="Number of concurrent requests (default: 10)",
+        help="Number of concurrent requests (default: 20)",
     )
     parser.add_argument(
         "--verbose",
@@ -141,7 +141,7 @@ def main() -> int:
     # Handle --single mode: scrape and display a single incident
     if args.single:
         from src.csv_parser import fetch_incidents
-        from src.page_scraper import scrape_page
+        from src.page_scraper import scrape_page_sync
         from rich.panel import Panel
         from rich.text import Text
         import httpx
@@ -162,7 +162,7 @@ def main() -> int:
         if incident.detail_page_url:
             con.console.print(f"[bold]Scraping detail page...[/bold]")
             try:
-                page_data = scrape_page(incident.detail_page_url)
+                page_data = scrape_page_sync(incident.detail_page_url)
                 incident.description = page_data.description
                 incident.source_links = page_data.source_links
                 incident.related_incidents = page_data.related_incidents

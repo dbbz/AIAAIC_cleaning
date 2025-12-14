@@ -200,3 +200,39 @@ def clear_errors(errors_path: Path) -> None:
     """Clear the errors file."""
     if errors_path.exists():
         errors_path.unlink()
+
+
+def remove_ids_from_jsonl(jsonl_path: Path, ids_to_remove: set[str]) -> int:
+    """Remove records with specific IDs from the JSONL file.
+
+    This prevents duplicates when re-scraping specific incidents.
+
+    Returns the number of records removed.
+    """
+    if not jsonl_path.exists() or not ids_to_remove:
+        return 0
+
+    # Read all records, filtering out the ones to remove
+    records_to_keep = []
+    removed_count = 0
+
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                if data.get("aiaaic_id") in ids_to_remove:
+                    removed_count += 1
+                else:
+                    records_to_keep.append(line)
+            except json.JSONDecodeError:
+                records_to_keep.append(line)  # Keep malformed lines
+
+    # Write back
+    with open(jsonl_path, "w", encoding="utf-8") as f:
+        for line in records_to_keep:
+            f.write(line + "\n")
+
+    return removed_count

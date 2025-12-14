@@ -18,6 +18,7 @@ from .utils import (
     clear_errors,
     load_error_ids,
     load_processed_ids,
+    remove_ids_from_jsonl,
 )
 
 # Default paths
@@ -29,6 +30,7 @@ DEFAULT_ERRORS_FILE = DEFAULT_OUTPUT_DIR / "errors.jsonl"
 REQUEST_TIMEOUT = 30.0
 MAX_RETRIES = 3
 RETRY_BACKOFF = [1, 2, 5]  # seconds
+DEFAULT_CONCURRENCY = 20  # Parallel requests (was 10)
 
 
 async def scrape_single_incident(
@@ -149,14 +151,23 @@ async def scrape_batch(
     stats: ScrapeStats,
     output_path: Path,
     errors_path: Path,
-    concurrency: int = 10,
+    concurrency: int = DEFAULT_CONCURRENCY,
     verbose: bool = False,
     on_progress: Callable[[int], None] | None = None,
 ) -> None:
     """Scrape a batch of incidents concurrently."""
     semaphore = asyncio.Semaphore(concurrency)
 
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+    # Configure client for high-throughput scraping
+    limits = httpx.Limits(
+        max_connections=concurrency + 10,  # Allow extra connections
+        max_keepalive_connections=concurrency,
+    )
+    async with httpx.AsyncClient(
+        timeout=REQUEST_TIMEOUT,
+        limits=limits,
+        http2=True,  # Enable HTTP/2 multiplexing if server supports it
+    ) as client:
 
         async def scrape_with_semaphore(incident: AIAAICIncident) -> bool:
             async with semaphore:
@@ -183,7 +194,7 @@ async def run_scraper(
     retry_errors: bool = False,
     update: bool = False,
     sample: int | None = None,
-    concurrency: int = 10,
+    concurrency: int = DEFAULT_CONCURRENCY,
     verbose: bool = False,
     target_ids: set[str] | None = None,
 ) -> ScrapeStats:
@@ -227,10 +238,18 @@ async def run_scraper(
     if target_ids:
         # Only process specific IDs (for rescrape-incomplete, etc.)
         incidents_to_process = [i for i in all_incidents if i.aiaaic_id in target_ids]
+        # Remove existing entries to prevent duplicates
+        removed = remove_ids_from_jsonl(output_path, target_ids)
+        if removed:
+            con.print_info(f"Removed {removed} existing records (will be re-scraped)")
         con.print_info(f"Targeting {len(incidents_to_process)} specific incidents")
     elif retry_errors:
         # Only process incidents that had errors
         incidents_to_process = [i for i in all_incidents if i.aiaaic_id in error_ids]
+        # Remove existing entries to prevent duplicates (in case partial data was saved)
+        removed = remove_ids_from_jsonl(output_path, error_ids)
+        if removed:
+            con.print_info(f"Removed {removed} existing records (will be re-scraped)")
         clear_errors(errors_path)
         con.print_info(f"Retrying {len(incidents_to_process)} failed incidents")
     elif update:

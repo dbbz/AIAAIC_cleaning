@@ -15,10 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--incomplete` flag to find scraped incidents missing page data (description, sources)
 - `--rescrape-incomplete` flag to find and rescrape incomplete incidents in one step
 
+### Improved
+
+- **Full multi-paragraph description extraction**: Now extracts complete descriptions with all narrative sections ("What happened", "Why it happened", "What it means") instead of just the first paragraph. Descriptions went from ~150 chars to ~800+ chars on average.
+- **Duplicate prevention**: Added `remove_ids_from_jsonl()` utility to prevent duplicates when using `--retry-errors` or `--rescrape-incomplete`
+- **Faster scraping**: Increased default concurrency from 10 to 20 parallel requests. Added HTTP/2 support and optimized connection pooling.
+
 ### Fixed
 
 - **Fixed Google Sheets 400 error**: Switched to curl subprocess for CSV download to handle Google's cross-origin redirects that strip headers in httpx
 - **Fixed missing source links**: Now extracts URLs from plain text (not just `<a>` tags) - many AIAAIC pages list source URLs as underlined `<span>` elements
+- **Fixed --single mode**: Added sync wrapper for page scraping to fix TypeError
 
 ## [0.1.0] - 2024-12-11
 

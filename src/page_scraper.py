@@ -30,6 +30,36 @@ BOILERPLATE_PATTERNS = [
 # Base URL for resolving relative links
 BASE_URL = "https://www.aiaaic.org"
 
+# Metadata field patterns that signal end of description (these are in CSV)
+METADATA_FIELD_PATTERNS = [
+    r"^System\b",
+    r"^Deployer",
+    r"^Developer",
+    r"^Country",
+    r"^Sector",
+    r"^Purpose",
+    r"^Issues?",
+    r"^News trigger",
+    r"^External harm",
+    r"^Internal impact",
+    r"^AIAAIC Repository ID",
+    r"^Technolog",
+]
+
+# Narrative section headings to preserve in description
+NARRATIVE_HEADINGS = [
+    "What happened",
+    "Why it happened",
+    "What it means",
+    "Background",
+    "Impact",
+    "Definitions",
+]
+
+# Minimum content thresholds
+MIN_PARAGRAPH_LENGTH = 40
+MIN_DESCRIPTION_LENGTH = 100
+
 
 @dataclass
 class PageData:
@@ -213,31 +243,80 @@ def extract_links(
     return source_links, related_incidents
 
 
-def extract_description(soup: BeautifulSoup) -> str | None:
-    """Extract the main description from the page using multiple fallback strategies.
+def _is_metadata_section(text: str) -> bool:
+    """Check if section text indicates a metadata section (Section 1 or 3)."""
+    # Section 1: Has "Occurred:" and "Page published:"
+    if "Occurred:" in text and "Page published:" in text:
+        return True
+    # Section 3: Has multiple metadata field names
+    metadata_count = sum(
+        1 for pattern in METADATA_FIELD_PATTERNS
+        if re.search(pattern, text, re.IGNORECASE)
+    )
+    return metadata_count >= 3
 
-    Strategy order:
-    1. Look for role="main" and extract substantial paragraphs
-    2. Look for bold text that appears to be a summary
-    3. Use og:description meta tag
-    """
-    # Strategy 1: Find main content area
-    main = soup.find(attrs={"role": "main"})
-    if main:
-        paragraphs = main.find_all("p")
-        for p in paragraphs:
-            text = p.get_text(strip=True)
-            # Look for substantial text that's not boilerplate
-            if len(text) > 80 and not is_boilerplate(text):
-                # Skip if it looks like a link list or metadata
-                if not text.startswith("http") and "Occurred:" not in text:
-                    return text
 
-    # Strategy 2: Look for bold/strong text that might be a summary
+def _is_metadata_line(text: str) -> bool:
+    """Check if text line starts a metadata field (stop extraction here)."""
+    return any(re.match(pattern, text, re.IGNORECASE) for pattern in METADATA_FIELD_PATTERNS)
+
+
+def _has_narrative_content(section) -> bool:
+    """Check if section contains multiple substantial narrative paragraphs."""
+    paragraphs = section.find_all("p")
+    substantial_count = sum(
+        1 for p in paragraphs
+        if len(p.get_text(strip=True)) > 80
+        and not is_boilerplate(p.get_text(strip=True))
+    )
+    return substantial_count >= 2
+
+
+def _is_narrative_heading(text: str) -> bool:
+    """Check if text is a narrative section heading like 'What happened'."""
+    text_lower = text.lower().strip()
+    return any(heading.lower() in text_lower for heading in NARRATIVE_HEADINGS)
+
+
+def _extract_paragraphs(section) -> list[str]:
+    """Extract paragraphs from a section, stopping at metadata boundaries."""
+    result = []
+
+    for element in section.find_all(["p", "h2", "h3", "h4"]):
+        text = element.get_text(strip=True)
+
+        # Skip empty/short content
+        if len(text) < MIN_PARAGRAPH_LENGTH:
+            continue
+
+        # Skip boilerplate
+        if is_boilerplate(text):
+            continue
+
+        # Skip URLs
+        if text.startswith("http"):
+            continue
+
+        # Stop at metadata boundary
+        if _is_metadata_line(text):
+            break
+
+        # Handle headings - preserve narrative ones with markdown bold
+        if element.name in ["h2", "h3", "h4"]:
+            if _is_narrative_heading(text):
+                result.append(f"**{text}**")
+        else:
+            result.append(text)
+
+    return result
+
+
+def _fallback_extraction(soup: BeautifulSoup) -> str | None:
+    """Fallback extraction strategies when section-based approach fails."""
+    # Strategy: Look for bold/strong text that might be a summary
     for bold in soup.find_all(["b", "strong"]):
         text = bold.get_text(strip=True)
         if len(text) > 50 and not is_boilerplate(text):
-            # Check parent for more context
             parent = bold.parent
             if parent:
                 parent_text = parent.get_text(strip=True)
@@ -245,23 +324,14 @@ def extract_description(soup: BeautifulSoup) -> str | None:
                     return parent_text
             return text
 
-    # Strategy 3: Look in section elements
-    for section in soup.find_all("section"):
-        paragraphs = section.find_all("p")
-        for p in paragraphs:
-            text = p.get_text(strip=True)
-            if len(text) > 100 and not is_boilerplate(text):
-                if not text.startswith("http") and "Occurred:" not in text:
-                    return text
-
-    # Strategy 4: Fallback to og:description meta tag
+    # Strategy: og:description meta tag
     og_desc = soup.find("meta", property="og:description")
     if og_desc:
         content = og_desc.get("content", "").strip()
         if content and len(content) > 20:
             return content
 
-    # Strategy 5: Try itemprop description
+    # Strategy: itemprop description
     itemprop_desc = soup.find("meta", attrs={"itemprop": "description"})
     if itemprop_desc:
         content = itemprop_desc.get("content", "").strip()
@@ -269,6 +339,59 @@ def extract_description(soup: BeautifulSoup) -> str | None:
             return content
 
     return None
+
+
+def extract_description(soup: BeautifulSoup) -> str | None:
+    """Extract complete multi-paragraph description from the page.
+
+    AIAAIC pages have a consistent structure:
+    - Section 0: Title
+    - Section 1: Metadata (Occurred, Page published)
+    - Section 2: Description (TARGET) - multiple paragraphs with subsections
+    - Section 3: Field metadata (System, Developer, Country, etc.)
+    - Section 4+: Related content, footer
+
+    Strategy:
+    1. Find the description section (has narrative content, not metadata)
+    2. Extract all paragraphs until metadata boundary
+    3. Join with double newlines
+    4. Fall back to meta tags if section-based extraction fails
+    """
+    sections = soup.find_all("section")
+
+    # Strategy 1: Section-based extraction (preferred for multi-paragraph)
+    if len(sections) >= 3:
+        # Skip first section (title) and last section (footer)
+        for section in sections[1:-1]:
+            section_text = section.get_text(strip=True)
+
+            # Skip metadata sections
+            if _is_metadata_section(section_text):
+                continue
+
+            # Skip "Related" sections
+            if section_text.lower().startswith("related"):
+                continue
+
+            # Check if this section has narrative content
+            if _has_narrative_content(section):
+                paragraphs = _extract_paragraphs(section)
+                if paragraphs:
+                    description = "\n\n".join(paragraphs)
+                    if len(description) >= MIN_DESCRIPTION_LENGTH:
+                        return description
+
+    # Strategy 2: Try role="main" area
+    main = soup.find(attrs={"role": "main"})
+    if main:
+        paragraphs = _extract_paragraphs(main)
+        if paragraphs:
+            description = "\n\n".join(paragraphs)
+            if len(description) >= MIN_DESCRIPTION_LENGTH:
+                return description
+
+    # Strategy 3: Fallback to meta tags and bold text
+    return _fallback_extraction(soup)
 
 
 async def fetch_page(client: httpx.AsyncClient, url: str) -> str:
@@ -307,3 +430,14 @@ async def scrape_page(client: httpx.AsyncClient, url: str) -> PageData:
     """Fetch and parse an AIAAIC incident page."""
     html = await fetch_page(client, url)
     return parse_page(html, url)
+
+
+def scrape_page_sync(url: str) -> PageData:
+    """Synchronous wrapper for scraping a single page.
+
+    Creates a temporary httpx client for the request.
+    Use this for --single mode or one-off scrapes.
+    """
+    response = httpx.get(url, follow_redirects=True, timeout=30.0)
+    response.raise_for_status()
+    return parse_page(response.text, url)
