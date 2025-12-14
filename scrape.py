@@ -13,6 +13,8 @@ Usage:
     uv run scrape.py --errors           # List failed scrapes
     uv run scrape.py --incomplete       # List incidents with missing page data
     uv run scrape.py --rescrape-incomplete  # Find and rescrape incomplete
+    uv run scrape.py --check            # Check data consistency (duplicates)
+    uv run scrape.py --deduplicate      # Remove duplicates, keep best version
     uv run scrape.py --concurrency 20   # Set concurrent requests (default: 20)
     uv run scrape.py --verbose          # Show detailed extraction info
 """
@@ -80,6 +82,16 @@ def main() -> int:
         "--rescrape-incomplete",
         action="store_true",
         help="Find and rescrape incidents with missing page data",
+    )
+    mode_group.add_argument(
+        "--check",
+        action="store_true",
+        help="Check data consistency (duplicates, malformed records)",
+    )
+    mode_group.add_argument(
+        "--deduplicate",
+        action="store_true",
+        help="Remove duplicate records, keeping the best version",
     )
 
     # Options
@@ -342,6 +354,126 @@ def main() -> int:
         except KeyboardInterrupt:
             con.print_warning("\nInterrupted by user. Progress has been saved.")
             return 130
+
+    # Handle --check mode: data consistency validation
+    if args.check:
+        from src.utils import check_consistency
+
+        output_path = args.output
+        if not output_path.exists():
+            con.print_error(f"Output file not found: {output_path}")
+            con.console.print("[dim]Run the scraper first to generate data[/dim]")
+            return 1
+
+        con.console.print("[bold]Checking data consistency...[/bold]\n")
+        report = check_consistency(output_path)
+
+        from rich.table import Table
+        from rich.panel import Panel
+
+        # Summary
+        summary = Table(show_header=False, box=None, padding=(0, 2))
+        summary.add_column("Metric", style="dim")
+        summary.add_column("Value")
+
+        summary.add_row("Total records", str(report.total_records))
+        summary.add_row("Unique IDs", str(report.unique_ids))
+        summary.add_row("Duplicate groups", str(len(report.duplicate_groups)))
+        summary.add_row("Total duplicates", str(report.total_duplicates))
+        summary.add_row("Malformed lines", str(report.malformed_lines))
+        summary.add_row("Records without ID", str(report.records_without_id))
+
+        con.console.print(Panel(summary, title="Consistency Report", border_style="cyan"))
+
+        if not report.has_issues:
+            con.console.print("\n[green]No consistency issues found![/green]")
+            return 0
+
+        # Show duplicates detail
+        if report.duplicate_groups:
+            con.console.print(f"\n[yellow]Duplicates ({len(report.duplicate_groups)} groups, {report.total_duplicates} extra records):[/yellow]")
+
+            dup_table = Table(title=None)
+            dup_table.add_column("AIAAIC ID", style="cyan")
+            dup_table.add_column("Count", style="yellow")
+            dup_table.add_column("Best Version", style="green")
+            dup_table.add_column("Dates", style="dim")
+
+            for group in report.duplicate_groups[:20]:  # Show first 20
+                best = group.best_record
+                dates = [r.scraped_at.strftime("%Y-%m-%d %H:%M") if r.scraped_at else "?" for r in group.records]
+                dup_table.add_row(
+                    group.aiaaic_id,
+                    str(group.count),
+                    f"scraped={best.page_scraped}, desc={bool(best.description)}",
+                    ", ".join(dates),
+                )
+
+            con.console.print(dup_table)
+
+            if len(report.duplicate_groups) > 20:
+                con.console.print(f"[dim]... and {len(report.duplicate_groups) - 20} more duplicate groups[/dim]")
+
+        if report.malformed_lines > 0:
+            con.console.print(f"\n[red]Malformed lines: {report.malformed_lines}[/red]")
+
+        if report.records_without_id > 0:
+            con.console.print(f"\n[red]Records without ID: {report.records_without_id}[/red]")
+
+        con.console.print("\n[dim]Use --deduplicate to automatically fix duplicates[/dim]")
+        return 1
+
+    # Handle --deduplicate mode: remove duplicates
+    if args.deduplicate:
+        from src.utils import check_consistency, deduplicate_jsonl
+
+        output_path = args.output
+        if not output_path.exists():
+            con.print_error(f"Output file not found: {output_path}")
+            con.console.print("[dim]Run the scraper first to generate data[/dim]")
+            return 1
+
+        # First show what will be done
+        report = check_consistency(output_path)
+
+        if not report.duplicate_groups:
+            con.console.print("[green]No duplicates found - file is clean![/green]")
+            return 0
+
+        con.console.print(f"[bold]Found {len(report.duplicate_groups)} duplicate groups ({report.total_duplicates} extra records)[/bold]\n")
+
+        # Show what will be kept
+        from rich.table import Table
+
+        table = Table(title="Deduplication Plan")
+        table.add_column("AIAAIC ID", style="cyan")
+        table.add_column("Copies", style="yellow")
+        table.add_column("Keep", style="green")
+        table.add_column("Remove", style="red")
+
+        for group in report.duplicate_groups[:10]:
+            best = group.best_record
+            keep_info = f"scraped_at={best.scraped_at.strftime('%Y-%m-%d') if best.scraped_at else '?'}"
+            if best.description:
+                keep_info += f", desc={len(best.description)} chars"
+            table.add_row(
+                group.aiaaic_id,
+                str(group.count),
+                keep_info,
+                str(group.count - 1),
+            )
+
+        con.console.print(table)
+
+        if len(report.duplicate_groups) > 10:
+            con.console.print(f"[dim]... and {len(report.duplicate_groups) - 10} more groups[/dim]")
+
+        # Perform deduplication
+        con.console.print("\n[bold]Deduplicating...[/bold]")
+        kept, removed = deduplicate_jsonl(output_path)
+
+        con.print_success(f"Done! Kept {kept} records, removed {removed} duplicates")
+        return 0
 
     # Handle export mode
     if args.export:

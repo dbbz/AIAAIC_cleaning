@@ -1,6 +1,8 @@
 """File I/O utilities for the AIAAIC scraper."""
 
 import json
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Iterator
 
@@ -236,3 +238,192 @@ def remove_ids_from_jsonl(jsonl_path: Path, ids_to_remove: set[str]) -> int:
             f.write(line + "\n")
 
     return removed_count
+
+
+# === DATA CONSISTENCY CHECKING ===
+
+
+@dataclass
+class DuplicateGroup:
+    """A group of duplicate records for the same AIAAIC ID."""
+
+    aiaaic_id: str
+    records: list[AIAAICIncident]
+    best_record: AIAAICIncident
+    removed_count: int
+
+    @property
+    def count(self) -> int:
+        return len(self.records)
+
+
+@dataclass
+class ConsistencyReport:
+    """Report from data consistency check."""
+
+    total_records: int
+    unique_ids: int
+    duplicate_groups: list[DuplicateGroup]
+    malformed_lines: int
+    records_without_id: int
+
+    @property
+    def total_duplicates(self) -> int:
+        return sum(g.count - 1 for g in self.duplicate_groups)
+
+    @property
+    def has_issues(self) -> bool:
+        return bool(self.duplicate_groups) or self.malformed_lines > 0 or self.records_without_id > 0
+
+
+def check_consistency(jsonl_path: Path) -> ConsistencyReport:
+    """Check JSONL file for data consistency issues.
+
+    Checks for:
+    - Duplicate AIAAIC IDs
+    - Malformed JSON lines
+    - Records without IDs
+
+    Returns a ConsistencyReport with detailed findings.
+    """
+    if not jsonl_path.exists():
+        return ConsistencyReport(
+            total_records=0,
+            unique_ids=0,
+            duplicate_groups=[],
+            malformed_lines=0,
+            records_without_id=0,
+        )
+
+    # Group records by ID
+    records_by_id: dict[str, list[AIAAICIncident]] = {}
+    malformed = 0
+    no_id = 0
+    total = 0
+
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            total += 1
+            try:
+                data = json.loads(line)
+                aiaaic_id = data.get("aiaaic_id")
+                if not aiaaic_id:
+                    no_id += 1
+                    continue
+                incident = AIAAICIncident.model_validate(data)
+                records_by_id.setdefault(aiaaic_id, []).append(incident)
+            except json.JSONDecodeError:
+                malformed += 1
+            except ValueError:
+                malformed += 1
+
+    # Find duplicates and determine best record for each
+    duplicate_groups = []
+    for aiaaic_id, records in records_by_id.items():
+        if len(records) > 1:
+            # Sort by scraped_at (newest first), then by data quality
+            def score(r: AIAAICIncident) -> tuple:
+                """Score record by quality (higher = better)."""
+                quality = 0
+                if r.description:
+                    quality += len(r.description)
+                if r.source_links:
+                    quality += len(r.source_links) * 100
+                if r.page_scraped:
+                    quality += 1000
+                return (r.scraped_at or datetime.min, quality)
+
+            sorted_records = sorted(records, key=score, reverse=True)
+            best = sorted_records[0]
+
+            duplicate_groups.append(DuplicateGroup(
+                aiaaic_id=aiaaic_id,
+                records=records,
+                best_record=best,
+                removed_count=len(records) - 1,
+            ))
+
+    return ConsistencyReport(
+        total_records=total,
+        unique_ids=len(records_by_id),
+        duplicate_groups=duplicate_groups,
+        malformed_lines=malformed,
+        records_without_id=no_id,
+    )
+
+
+def deduplicate_jsonl(jsonl_path: Path, dry_run: bool = False) -> tuple[int, int]:
+    """Remove duplicate records from JSONL file, keeping the best version.
+
+    For each duplicate ID, keeps the record with:
+    1. Most recent scraped_at timestamp
+    2. Highest data quality (longer description, more sources)
+
+    Args:
+        jsonl_path: Path to the JSONL file
+        dry_run: If True, report what would be removed without modifying file
+
+    Returns:
+        Tuple of (records_kept, records_removed)
+    """
+    if not jsonl_path.exists():
+        return 0, 0
+
+    # Load all records grouped by ID
+    records_by_id: dict[str, list[tuple[str, AIAAICIncident]]] = {}  # id -> [(line, incident)]
+    malformed_lines: list[str] = []
+
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                aiaaic_id = data.get("aiaaic_id")
+                if not aiaaic_id:
+                    malformed_lines.append(line)
+                    continue
+                incident = AIAAICIncident.model_validate(data)
+                records_by_id.setdefault(aiaaic_id, []).append((line, incident))
+            except (json.JSONDecodeError, ValueError):
+                malformed_lines.append(line)
+
+    # Select best record for each ID
+    lines_to_keep: list[str] = []
+    removed_count = 0
+
+    for aiaaic_id, records in records_by_id.items():
+        if len(records) == 1:
+            lines_to_keep.append(records[0][0])
+        else:
+            # Score and sort
+            def score(r: tuple[str, AIAAICIncident]) -> tuple:
+                inc = r[1]
+                quality = 0
+                if inc.description:
+                    quality += len(inc.description)
+                if inc.source_links:
+                    quality += len(inc.source_links) * 100
+                if inc.page_scraped:
+                    quality += 1000
+                return (inc.scraped_at or datetime.min, quality)
+
+            sorted_records = sorted(records, key=score, reverse=True)
+            lines_to_keep.append(sorted_records[0][0])
+            removed_count += len(records) - 1
+
+    # Keep malformed lines (don't lose data)
+    lines_to_keep.extend(malformed_lines)
+
+    if not dry_run:
+        with open(jsonl_path, "w", encoding="utf-8") as f:
+            for line in lines_to_keep:
+                f.write(line + "\n")
+
+    return len(lines_to_keep), removed_count
+
+

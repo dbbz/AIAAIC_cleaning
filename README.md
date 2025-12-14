@@ -59,6 +59,8 @@ Options:
   --errors          List incidents that failed scraping
   --incomplete      List incidents with missing page data
   --rescrape-incomplete  Find and rescrape incomplete incidents
+  --check           Check data consistency (duplicates, malformed records)
+  --deduplicate     Remove duplicates, keeping the best version
   --concurrency N   Number of concurrent requests (default: 20)
   --verbose, -v     Show detailed status for each incident
   --output, -o      Output file path (default: data/aiaaic_incidents.jsonl)
@@ -102,6 +104,12 @@ uv run scrape.py --incomplete
 
 # Rescrape all incomplete incidents
 uv run scrape.py --rescrape-incomplete
+
+# Check data consistency (find duplicates)
+uv run scrape.py --check
+
+# Remove duplicates (keeps best version)
+uv run scrape.py --deduplicate
 ```
 
 ## Output

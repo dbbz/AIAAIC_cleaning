@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from rapidfuzz import fuzz
 
-from src.utils import load_errors, load_incidents
+from src.utils import load_errors, load_incidents, check_consistency, deduplicate_jsonl
 
 # === PAGE CONFIG (must be first Streamlit command) ===
 st.set_page_config(page_title="AIAAIC Inspector", page_icon="🔍", layout="wide")
@@ -794,6 +794,105 @@ def page_inspect():
             st.info("No detail page URL for this record")
 
 
+def page_consistency():
+    """Data Consistency - check and fix duplicate records."""
+    st.header("Data Consistency")
+
+    st.markdown("""
+    This page helps you identify and fix data consistency issues:
+    - **Duplicate records** - Same AIAAIC ID appearing multiple times
+    - **Malformed records** - Invalid JSON or missing required fields
+    - **Version conflicts** - Multiple versions of the same incident
+    """)
+
+    st.divider()
+
+    # Run consistency check
+    report = check_consistency(DATA_PATH)
+
+    # Summary metrics
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Records", report.total_records)
+    c2.metric("Unique IDs", report.unique_ids)
+    c3.metric("Duplicate Groups", len(report.duplicate_groups),
+              delta=f"-{report.total_duplicates}" if report.total_duplicates else None,
+              delta_color="inverse")
+    c4.metric("Issues", report.malformed_lines + report.records_without_id,
+              delta="needs attention" if report.malformed_lines + report.records_without_id > 0 else None,
+              delta_color="inverse")
+
+    st.divider()
+
+    if not report.has_issues:
+        st.success("No consistency issues found! Your data is clean.")
+        return
+
+    # Duplicates section
+    if report.duplicate_groups:
+        st.subheader(f"Duplicate Records ({len(report.duplicate_groups)} groups)")
+
+        st.markdown("""
+        These AIAAIC IDs appear multiple times in the data. This can happen during re-scraping operations.
+        The **best version** is determined by: most recent scrape date + highest data quality (longer description, more sources).
+        """)
+
+        # Build comparison table
+        dup_data = []
+        for group in report.duplicate_groups:
+            best = group.best_record
+            for i, record in enumerate(group.records):
+                is_best = record == best
+                dup_data.append({
+                    "ID": group.aiaaic_id,
+                    "Version": i + 1,
+                    "Best": "✅" if is_best else "",
+                    "Scraped": record.scraped_at.strftime("%Y-%m-%d %H:%M") if record.scraped_at else "?",
+                    "Has Desc": "✅" if record.description else "❌",
+                    "Desc Length": len(record.description) if record.description else 0,
+                    "Sources": len(record.source_links) if record.source_links else 0,
+                    "Page Scraped": "✅" if record.page_scraped else "❌",
+                })
+
+        dup_df = pd.DataFrame(dup_data)
+        st.dataframe(dup_df, hide_index=True, height=400, use_container_width=True)
+
+        # Deduplication action
+        st.divider()
+        st.subheader("Fix Duplicates")
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"""
+            **Deduplication will:**
+            - Remove **{report.total_duplicates}** duplicate records
+            - Keep the **best version** of each incident (newest + most complete)
+            - Preserve all unique incidents ({report.unique_ids} total)
+            """)
+
+        with col2:
+            if st.button("Deduplicate Now", type="primary", use_container_width=True):
+                with st.spinner("Removing duplicates..."):
+                    kept, removed = deduplicate_jsonl(DATA_PATH)
+                    # Clear cache to reload data
+                    load_data.clear()
+                    load_errs.clear()
+                st.success(f"Done! Kept {kept} records, removed {removed} duplicates")
+                st.rerun()
+
+    # Other issues
+    if report.malformed_lines > 0 or report.records_without_id > 0:
+        st.divider()
+        st.subheader("Other Issues")
+
+        if report.malformed_lines > 0:
+            st.error(f"**{report.malformed_lines}** malformed JSON lines found")
+            st.caption("These lines could not be parsed and may indicate data corruption.")
+
+        if report.records_without_id > 0:
+            st.error(f"**{report.records_without_id}** records without AIAAIC ID")
+            st.caption("These records are missing the required identifier field.")
+
+
 # === DATA ACCESS HELPERS ===
 # These wrap cached functions to provide a clean interface for page functions
 
@@ -830,12 +929,13 @@ browse = st.Page(page_browse, title="Browse", icon="📋")
 values = st.Page(page_values, title="Values", icon="🔤")
 gaps = st.Page(page_gaps, title="Gaps", icon="⚠️")
 inspect = st.Page(page_inspect, title="Inspect", icon="🔍")
+consistency = st.Page(page_consistency, title="Consistency", icon="🔧")
 
 # Navigation
 pg = st.navigation({
     "Overview": [dashboard],
     "Data": [browse, values],
-    "Quality": [gaps, inspect],
+    "Quality": [gaps, inspect, consistency],
 })
 
 # Sidebar info

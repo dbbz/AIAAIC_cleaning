@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--errors` flag to list all failed scrapes from errors.jsonl
 - `--incomplete` flag to find scraped incidents missing page data (description, sources)
 - `--rescrape-incomplete` flag to find and rescrape incomplete incidents in one step
+- `--check` flag for data consistency validation (detects duplicates, malformed records)
+- `--deduplicate` flag to automatically remove duplicates, keeping the best version
+- **Data Consistency page** in Streamlit app for visual duplicate detection and one-click deduplication
 
 ### Improved
 
