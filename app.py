@@ -768,7 +768,7 @@ def page_inspect():
     if st.session_state.inspect_idx >= len(filtered):
         st.session_state.inspect_idx = 0
 
-    nav1, nav2, nav3, nav4, nav5 = st.columns([1, 1, 2, 2, 1])
+    nav1, nav2, nav5, nav4, nav3 = st.columns([1, 1, 1, 2, 2])
     with nav1:
         if st.button("⏮ First", width='stretch'):
             st.session_state.inspect_idx = 0
@@ -778,7 +778,7 @@ def page_inspect():
             st.session_state.inspect_idx -= 1
             st.rerun()
     with nav3:
-        st.markdown(f"### {st.session_state.inspect_idx + 1} / {len(filtered)}")
+        st.markdown(f"#### {st.session_state.inspect_idx + 1} / {len(filtered)}")
     with nav4:
         jump = st.number_input("Go to", 1, len(filtered), st.session_state.inspect_idx + 1, label_visibility="collapsed")
         if jump - 1 != st.session_state.inspect_idx:

@@ -36,7 +36,13 @@
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap add CHANGELOG.md README.md app.py scrape.py src/utils.py data/aiaaic_incidents.jsonl)",
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nAdd data consistency checking and deduplication tools\n\nFeatures:\n- `--check` CLI flag: validates data for duplicates, malformed records\n- `--deduplicate` CLI flag: removes duplicates keeping best version\n- Data Consistency page in Streamlit app with one-click deduplication\n- Scoring system: newest scraped_at + longest description + most sources\n\nThe data file was deduplicated (4294 → 2145 records), removing 2149\nduplicate records created during re-scraping. Best versions kept based\non quality scoring.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nAdd description length distribution chart to Dashboard\n\n- Add Altair histogram showing description lengths by quality category\n- Color-coded bars: red (Poor <100), orange (Short), yellow (Fair),\n  green (Good 500-2k), blue (Long >2k)\n- Summary stats: median, mean, min/max character counts\n- Quality indicators for very short and good length descriptions\n- Interactive tooltips on hover\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log --oneline -4)"
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log --oneline -4)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap remote:*)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log upstream/main..HEAD --oneline)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap fetch upstream)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log HEAD..upstream/main --oneline)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log upstream/main --oneline -5)",
+      "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nFix Streamlit deprecation warnings\n\nReplace `use_container_width=True` with `width=''stretch''` in all 7\noccurrences. The old parameter will be removed after 2025-12-31.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ]
   }
 }
