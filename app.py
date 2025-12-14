@@ -82,6 +82,14 @@ def is_incomplete(df):
     return ~has_description(df) | ~has_sources(df)
 
 
+def has_typos(df):
+    """Return boolean mask for rows with known typos in issues field."""
+    typo_set = set(KNOWN_TYPOS.keys())
+    return df["issues"].apply(
+        lambda x: bool(set(x) & typo_set) if isinstance(x, list) else False
+    )
+
+
 def join_list(v, sep=", "):
     """Join list values into a string."""
     return sep.join(v) if isinstance(v, list) and v else ""
@@ -441,6 +449,79 @@ def page_values():
             st.dataframe(pd.DataFrame({"Value": singletons}), hide_index=True, height=300)
 
 
+def show_record_detail(row):
+    """Show detail panel for a selected record."""
+    st.divider()
+    st.subheader(row["headline"])
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f"**ID:** {row['aiaaic_id']}")
+    c2.markdown(f"**Date:** {row['occurred'] or 'Unknown'}")
+    c3.markdown(f"**Scraped:** {'✅' if row['page_scraped'] else '⏳'}")
+    if row.get("detail_page_url"):
+        c4.link_button("Open page", row["detail_page_url"])
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Description:**")
+        if empty(row["description"]):
+            st.warning("No description")
+        else:
+            st.markdown(row["description"])
+
+    with right:
+        st.markdown("**Metadata:**")
+        for field, icon in [("countries", "🌍"), ("technologies", "🔧"),
+                            ("developers", "👨‍💻"), ("deployers", "🏢"),
+                            ("sectors", "📊")]:
+            val = row.get(field, [])
+            if val:
+                st.markdown(f"{icon} {join_list(val)}")
+
+        # Highlight typos in issues
+        issues = row.get("issues", [])
+        if issues:
+            display_issues = []
+            for issue in issues:
+                if issue in KNOWN_TYPOS:
+                    display_issues.append(f"~~{issue}~~ → {KNOWN_TYPOS[issue]}")
+                else:
+                    display_issues.append(issue)
+            st.markdown(f"⚠️ {', '.join(display_issues)}")
+
+        st.markdown("**Source Links:**")
+        sources = row.get("source_links", [])
+        if sources:
+            for s in sources:
+                if isinstance(s, dict):
+                    url = s.get("url", "")
+                    title = s.get("title") or url[:60]
+                    st.markdown(f"- [{title}]({url})")
+        else:
+            st.warning("No source links")
+
+
+def show_gap_table(data_df, key_prefix):
+    """Show a gap table with clickable rows and detail panel."""
+    display = data_df[["aiaaic_id", "headline", "occurred"]].reset_index(drop=True)
+    display.columns = ["ID", "Headline", "Date"]
+
+    event = st.dataframe(
+        display,
+        hide_index=True,
+        width="stretch",
+        height=300,
+        on_select="rerun",
+        selection_mode="single-row",
+        key=f"gaps_{key_prefix}_table",
+    )
+
+    if event and event.selection and event.selection.rows:
+        selected_idx = event.selection.rows[0]
+        row = data_df.iloc[selected_idx]
+        show_record_detail(row)
+
+
 def page_gaps():
     """Gaps - missing data with drill-down."""
     df = get_data()
@@ -449,53 +530,56 @@ def page_gaps():
     st.header("Data Gaps")
 
     # Compute gap categories
-    no_url = df[df["detail_page_url"].apply(empty)]
-    no_desc = df[(df["page_scraped"]) & (~has_description(df))]
-    no_src = df[~has_sources(df)]
-    no_date = df[df["occurred"].apply(empty)]
-    not_scraped = df[~df["page_scraped"] & ~df["detail_page_url"].apply(empty)]
+    no_url = df[df["detail_page_url"].apply(empty)].reset_index(drop=True)
+    no_desc = df[(df["page_scraped"]) & (~has_description(df))].reset_index(drop=True)
+    no_src = df[~has_sources(df)].reset_index(drop=True)
+    no_date = df[df["occurred"].apply(empty)].reset_index(drop=True)
+    not_scraped = df[~df["page_scraped"] & ~df["detail_page_url"].apply(empty)].reset_index(drop=True)
+    with_typos = df[has_typos(df)].reset_index(drop=True)
 
     # Summary metrics
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("No URL", len(no_url))
     c2.metric("No description", len(no_desc))
     c3.metric("No sources", len(no_src))
     c4.metric("No date", len(no_date))
-    c5.metric("Errors", len(errors))
+    c5.metric("Has typos", len(with_typos))
+    c6.metric("Errors", len(errors))
 
     st.divider()
 
     # Tabs for each category
-    tabs = st.tabs(["No description", "No sources", "No date", "Errors", "No URL", "Not scraped"])
+    tabs = st.tabs(["No description", "No sources", "No date", "Has typos", "Errors", "No URL", "Not scraped"])
 
     with tabs[0]:
         if no_desc.empty:
             st.success("All scraped incidents have descriptions")
         else:
-            display = no_desc[["aiaaic_id", "headline", "occurred"]].reset_index(drop=True)
-            display.columns = ["ID", "Headline", "Date"]
-            paged, _, _ = paginate_df(display, "gaps_desc")
-            st.dataframe(paged, hide_index=True, width="stretch")
+            st.caption(f"{len(no_desc)} records - click to view details")
+            show_gap_table(no_desc, "desc")
 
     with tabs[1]:
         if no_src.empty:
             st.success("All incidents have source links")
         else:
-            display = no_src[["aiaaic_id", "headline", "occurred"]].reset_index(drop=True)
-            display.columns = ["ID", "Headline", "Date"]
-            paged, _, _ = paginate_df(display, "gaps_src")
-            st.dataframe(paged, hide_index=True, width="stretch")
+            st.caption(f"{len(no_src)} records - click to view details")
+            show_gap_table(no_src, "src")
 
     with tabs[2]:
         if no_date.empty:
             st.success("All incidents have dates")
         else:
-            display = no_date[["aiaaic_id", "headline"]].reset_index(drop=True)
-            display.columns = ["ID", "Headline"]
-            paged, _, _ = paginate_df(display, "gaps_date")
-            st.dataframe(paged, hide_index=True, width="stretch")
+            st.caption(f"{len(no_date)} records - click to view details")
+            show_gap_table(no_date, "date")
 
     with tabs[3]:
+        if with_typos.empty:
+            st.success("No known typos detected")
+        else:
+            st.caption(f"{len(with_typos)} records - click to view details")
+            show_gap_table(with_typos, "typos")
+
+    with tabs[4]:
         if not errors:
             st.success("No scraping errors")
         else:
@@ -510,22 +594,19 @@ def page_gaps():
                         st.markdown(f"**{e.get('aiaaic_id', 'Unknown')}**")
                         st.code(e.get("error_message", "No message")[:200])
 
-    with tabs[4]:
+    with tabs[5]:
         if no_url.empty:
             st.success("All incidents have URLs")
         else:
-            display = no_url[["aiaaic_id", "headline", "occurred"]].reset_index(drop=True)
-            display.columns = ["ID", "Headline", "Date"]
-            st.dataframe(display, hide_index=True, width="stretch")
+            st.caption(f"{len(no_url)} records - click to view details")
+            show_gap_table(no_url, "url")
 
-    with tabs[5]:
+    with tabs[6]:
         if not_scraped.empty:
             st.success("All incidents with URLs have been scraped")
         else:
-            display = not_scraped[["aiaaic_id", "headline", "occurred"]].reset_index(drop=True)
-            display.columns = ["ID", "Headline", "Date"]
-            paged, _, _ = paginate_df(display, "gaps_not_scraped")
-            st.dataframe(paged, hide_index=True, width="stretch")
+            st.caption(f"{len(not_scraped)} records - click to view details")
+            show_gap_table(not_scraped, "not_scraped")
 
 
 def page_inspect():
@@ -534,30 +615,46 @@ def page_inspect():
 
     st.header("Scrape Inspector")
 
-    # Filter to records with URLs
-    with_url = df[~df["detail_page_url"].apply(empty)].reset_index(drop=True)
-
-    if with_url.empty:
-        st.warning("No records with detail page URLs")
-        return
+    # Filter options with descriptions
+    filter_options = {
+        "all": "All records",
+        "missing description": "Missing description",
+        "missing sources": "Missing sources",
+        "missing date": "Missing date",
+        "no URL": "No detail page URL",
+        "not scraped": "Not yet scraped",
+        "has typos": "Has known typos",
+        "complete": "Complete records",
+    }
 
     # Filter controls
     col1, col2 = st.columns([3, 1])
     with col1:
-        filter_opt = st.radio(
-            "Show",
-            ["all", "missing description", "missing sources", "complete"],
-            horizontal=True
+        filter_opt = st.selectbox(
+            "Filter by issue",
+            options=list(filter_options.keys()),
+            format_func=lambda x: filter_options[x],
         )
 
     # Apply filter
-    filtered = with_url.copy()
     if filter_opt == "missing description":
-        filtered = filtered[~has_description(filtered)].reset_index(drop=True)
+        filtered = df[~has_description(df)]
     elif filter_opt == "missing sources":
-        filtered = filtered[~has_sources(filtered)].reset_index(drop=True)
+        filtered = df[~has_sources(df)]
+    elif filter_opt == "missing date":
+        filtered = df[df["occurred"].apply(empty)]
+    elif filter_opt == "no URL":
+        filtered = df[df["detail_page_url"].apply(empty)]
+    elif filter_opt == "not scraped":
+        filtered = df[~df["page_scraped"] & ~df["detail_page_url"].apply(empty)]
+    elif filter_opt == "has typos":
+        filtered = df[has_typos(df)]
     elif filter_opt == "complete":
-        filtered = filtered[is_complete(filtered)].reset_index(drop=True)
+        filtered = df[is_complete(df)]
+    else:  # all
+        filtered = df
+
+    filtered = filtered.reset_index(drop=True)
 
     with col2:
         st.metric("Matching", len(filtered))
@@ -576,11 +673,11 @@ def page_inspect():
 
     nav1, nav2, nav3, nav4, nav5 = st.columns([1, 1, 2, 2, 1])
     with nav1:
-        if st.button("⏮ First", width="stretch"):
+        if st.button("⏮ First", use_container_width=True):
             st.session_state.inspect_idx = 0
             st.rerun()
     with nav2:
-        if st.button("◀ Prev", width="stretch", disabled=st.session_state.inspect_idx == 0):
+        if st.button("◀ Prev", use_container_width=True, disabled=st.session_state.inspect_idx == 0):
             st.session_state.inspect_idx -= 1
             st.rerun()
     with nav3:
@@ -591,7 +688,7 @@ def page_inspect():
             st.session_state.inspect_idx = jump - 1
             st.rerun()
     with nav5:
-        if st.button("Next ▶", width="stretch", disabled=st.session_state.inspect_idx >= len(filtered) - 1):
+        if st.button("Next ▶", use_container_width=True, disabled=st.session_state.inspect_idx >= len(filtered) - 1):
             st.session_state.inspect_idx += 1
             st.rerun()
 
@@ -604,56 +701,69 @@ def page_inspect():
     st.caption(f"**{row['aiaaic_id']}** | {row['occurred'] or 'Unknown date'}")
 
     # Quality indicators
-    has_desc = not empty(row["description"])
+    row_has_desc = not empty(row["description"])
     sources = row.get("source_links", [])
-    has_sources = bool(sources) and len(sources) > 0
+    row_has_sources = bool(sources) and len(sources) > 0
+    row_has_url = not empty(row.get("detail_page_url"))
 
-    ind1, ind2, ind3 = st.columns(3)
-    ind1.markdown(f"**Description:** {'✅' if has_desc else '❌ Missing'}")
-    ind2.markdown(f"**Sources:** {'✅ ' + str(len(sources)) if has_sources else '❌ Missing'}")
-    ind3.markdown(f"**Scraped:** {'✅' if row['page_scraped'] else '⏳ Pending'}")
+    ind1, ind2, ind3, ind4 = st.columns(4)
+    ind1.markdown(f"**Description:** {'✅' if row_has_desc else '❌'}")
+    ind2.markdown(f"**Sources:** {'✅ ' + str(len(sources)) if row_has_sources else '❌'}")
+    ind3.markdown(f"**Scraped:** {'✅' if row['page_scraped'] else '⏳'}")
+    ind4.markdown(f"**URL:** {'✅' if row_has_url else '❌'}")
 
     st.divider()
 
-    # Two columns: scraped data | iframe
+    # Two columns: scraped data | original page
     left, right = st.columns(2)
 
     with left:
         st.markdown("### Scraped Data")
 
         st.markdown("**Description:**")
-        if has_desc:
+        if row_has_desc:
             st.markdown(row["description"])
         else:
-            st.error("No description extracted")
+            st.warning("No description extracted")
 
         st.markdown("---")
 
         st.markdown("**Source Links:**")
-        if has_sources:
+        if row_has_sources:
             for i, s in enumerate(sources, 1):
                 if isinstance(s, dict):
                     url = s.get("url", "")
                     title = s.get("title") or f"Source {i}"
                     st.markdown(f"{i}. [{title}]({url})")
         else:
-            st.error("No source links found")
+            st.warning("No source links found")
 
         st.markdown("---")
 
         st.markdown("**Metadata:**")
         for field, icon in [("countries", "🌍"), ("technologies", "🔧"),
                             ("developers", "👨‍💻"), ("deployers", "🏢"),
-                            ("sectors", "📊"), ("issues", "⚠️")]:
+                            ("sectors", "📊")]:
             val = row.get(field, [])
             if val:
                 st.markdown(f"{icon} **{field}:** {join_list(val)}")
+
+        # Special handling for issues field - highlight typos
+        issues = row.get("issues", [])
+        if issues:
+            display_issues = []
+            for issue in issues:
+                if issue in KNOWN_TYPOS:
+                    display_issues.append(f"~~{issue}~~ → {KNOWN_TYPOS[issue]}")
+                else:
+                    display_issues.append(issue)
+            st.markdown(f"⚠️ **issues:** {', '.join(display_issues)}")
 
     with right:
         st.markdown("### Original Page")
         url = row.get("detail_page_url")
         if url:
-            st.link_button("Open in new tab", url, width="stretch")
+            st.link_button("Open in new tab", url, use_container_width=True)
 
             with st.spinner("Loading page content..."):
                 content = fetch_page_content(url)
@@ -664,7 +774,7 @@ def page_inspect():
             else:
                 st.error("Could not fetch page content")
         else:
-            st.warning("No detail page URL")
+            st.info("No detail page URL for this record")
 
 
 # === DATA ACCESS HELPERS ===
