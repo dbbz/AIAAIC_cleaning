@@ -13,6 +13,7 @@ Usage:
     uv run scrape.py --errors           # List failed scrapes
     uv run scrape.py --incomplete       # List incidents with missing page data
     uv run scrape.py --rescrape-incomplete  # Find and rescrape incomplete
+    uv run scrape.py --rescrape-incomplete --min-desc-length 500  # Also rescrape short descriptions
     uv run scrape.py --check            # Check data consistency (duplicates)
     uv run scrape.py --deduplicate      # Remove duplicates, keep best version
     uv run scrape.py --concurrency 20   # Set concurrent requests (default: 20)
@@ -120,6 +121,12 @@ def main() -> int:
         type=Path,
         default=DEFAULT_OUTPUT_FILE,
         help=f"Output file path (default: {DEFAULT_OUTPUT_FILE})",
+    )
+    parser.add_argument(
+        "--min-desc-length",
+        type=int,
+        metavar="N",
+        help="With --rescrape-incomplete: also rescrape if description < N chars (e.g., 500)",
     )
 
     args = parser.parse_args()
@@ -326,26 +333,45 @@ def main() -> int:
         # Find incomplete incident IDs
         incidents = list(load_incidents(output_path))
         incomplete_ids: set[str] = set()
+        short_desc_ids: set[str] = set()
+        min_len = args.min_desc_length
 
         for inc in incidents:
             if not inc.page_scraped:
                 continue
+            # Standard incomplete: missing description or sources
             if not inc.description or not inc.source_links:
                 incomplete_ids.add(inc.aiaaic_id)
+            # Short description check (if --min-desc-length specified)
+            elif min_len and inc.description and len(inc.description) < min_len:
+                short_desc_ids.add(inc.aiaaic_id)
 
-        if not incomplete_ids:
-            con.console.print("[green]All scraped incidents have complete page data![/green]")
+        # Combine both sets
+        target_ids = incomplete_ids | short_desc_ids
+
+        if not target_ids:
+            msg = "[green]All scraped incidents have complete page data"
+            if min_len:
+                msg += f" (descriptions >= {min_len} chars)"
+            msg += "![/green]"
+            con.console.print(msg)
             return 0
 
-        con.console.print(f"[bold]Found {len(incomplete_ids)} incomplete incidents to rescrape[/bold]\n")
+        # Show breakdown
+        con.console.print(f"[bold]Found {len(target_ids)} incidents to rescrape:[/bold]")
+        if incomplete_ids:
+            con.console.print(f"  - {len(incomplete_ids)} missing description or sources")
+        if short_desc_ids:
+            con.console.print(f"  - {len(short_desc_ids)} with description < {min_len} chars")
+        con.console.print()
 
-        # Run the scraper targeting only incomplete IDs
+        # Run the scraper targeting selected IDs
         try:
             stats = asyncio.run(
                 run_scraper(
                     output_path=output_path,
                     errors_path=DEFAULT_ERRORS_FILE,
-                    target_ids=incomplete_ids,
+                    target_ids=target_ids,
                     concurrency=args.concurrency,
                     verbose=args.verbose,
                 )

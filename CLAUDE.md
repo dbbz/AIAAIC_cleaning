@@ -32,6 +32,7 @@ uv run scrape.py --single AIAAIC123      # View single incident
 uv run scrape.py --errors                # List failed scrapes
 uv run scrape.py --incomplete            # Find missing page data
 uv run scrape.py --rescrape-incomplete   # Rescrape incomplete
+uv run scrape.py --rescrape-incomplete --min-desc-length 500  # Also rescrape short descriptions
 
 # Run the data quality inspector (Streamlit dashboard)
 uv run streamlit run app.py

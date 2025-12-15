@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--min-desc-length N` option for `--rescrape-incomplete` to also rescrape records with descriptions shorter than N characters (e.g., `--min-desc-length 500`)
 - `--no-url` flag to list incidents without detail page URLs for manual investigation
 - `--single <ID>` flag to scrape and display a single incident with formatted output
 - `--errors` flag to list all failed scrapes from errors.jsonl
@@ -26,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Fixed short description extraction**: Three bugs were causing incomplete descriptions:
+  1. `_has_narrative_content()` required 2+ substantial paragraphs - now accepts 1+ or >200 chars total
+  2. Narrative headings like "What happened" (13 chars) were filtered by length check before recognition - now handled first
+  3. `^Developer` pattern in metadata detection matched narrative text - now requires colon (e.g., `^Developer\s*:`)
 - **Fixed Google Sheets 400 error**: Switched to curl subprocess for CSV download to handle Google's cross-origin redirects that strip headers in httpx
 - **Fixed missing source links**: Now extracts URLs from plain text (not just `<a>` tags) - many AIAAIC pages list source URLs as underlined `<span>` elements
 - **Fixed --single mode**: Added sync wrapper for page scraping to fix TypeError

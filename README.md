@@ -59,6 +59,7 @@ Options:
   --errors          List incidents that failed scraping
   --incomplete      List incidents with missing page data
   --rescrape-incomplete  Find and rescrape incomplete incidents
+  --min-desc-length N  With --rescrape-incomplete: also rescrape if description < N chars
   --check           Check data consistency (duplicates, malformed records)
   --deduplicate     Remove duplicates, keeping the best version
   --concurrency N   Number of concurrent requests (default: 20)
@@ -104,6 +105,9 @@ uv run scrape.py --incomplete
 
 # Rescrape all incomplete incidents
 uv run scrape.py --rescrape-incomplete
+
+# Rescrape incomplete + short descriptions (<500 chars)
+uv run scrape.py --rescrape-incomplete --min-desc-length 500
 
 # Check data consistency (find duplicates)
 uv run scrape.py --check
