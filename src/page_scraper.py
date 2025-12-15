@@ -31,19 +31,21 @@ BOILERPLATE_PATTERNS = [
 BASE_URL = "https://www.aiaaic.org"
 
 # Metadata field patterns that signal end of description (these are in CSV)
+# Patterns require colon or emoji marker to avoid matching narrative text
+# e.g., "Developer:" or "System 🤖" but NOT "Developer Embark Studios..."
 METADATA_FIELD_PATTERNS = [
-    r"^System\b",
-    r"^Deployer",
-    r"^Developer",
-    r"^Country",
-    r"^Sector",
-    r"^Purpose",
-    r"^Issues?",
-    r"^News trigger",
-    r"^External harm",
-    r"^Internal impact",
-    r"^AIAAIC Repository ID",
-    r"^Technolog",
+    r"^System\s*[🤖:]",        # "System 🤖" or "System:"
+    r"^Deployer\s*:",          # Must have colon
+    r"^Developer\s*:",         # Must have colon - NOT matching "Developer Embark..."
+    r"^Country\s*:",
+    r"^Sector\s*:",
+    r"^Purpose\s*:",
+    r"^Issues?\s*:",
+    r"^News trigger\s*:",
+    r"^External harm",         # Keep as-is (distinct enough)
+    r"^Internal impact",       # Keep as-is (distinct enough)
+    r"^AIAAIC Repository ID",  # Keep as-is (very specific)
+    r"^Technolog\w*\s*:",      # Technology: or Technologies:
 ]
 
 # Narrative section headings to preserve in description
@@ -262,14 +264,24 @@ def _is_metadata_line(text: str) -> bool:
 
 
 def _has_narrative_content(section) -> bool:
-    """Check if section contains multiple substantial narrative paragraphs."""
+    """Check if section contains narrative content worth extracting.
+
+    Accepts sections with:
+    - At least 1 substantial paragraph (>80 chars), OR
+    - Total paragraph content >200 chars
+    """
     paragraphs = section.find_all("p")
     substantial_count = sum(
         1 for p in paragraphs
         if len(p.get_text(strip=True)) > 80
         and not is_boilerplate(p.get_text(strip=True))
     )
-    return substantial_count >= 2
+    # Accept sections with 1+ substantial paragraph
+    if substantial_count >= 1:
+        return True
+    # Also accept if total paragraph content is significant
+    total_content = sum(len(p.get_text(strip=True)) for p in paragraphs)
+    return total_content > 200
 
 
 def _is_narrative_heading(text: str) -> bool:
@@ -285,7 +297,13 @@ def _extract_paragraphs(section) -> list[str]:
     for element in section.find_all(["p", "h2", "h3", "h4"]):
         text = element.get_text(strip=True)
 
-        # Skip empty/short content
+        # Handle headings FIRST - preserve short narrative headings like "What happened"
+        if element.name in ["h2", "h3", "h4"]:
+            if _is_narrative_heading(text):
+                result.append(f"**{text}**")
+            continue  # Always skip to next element after handling heading
+
+        # Now check length for paragraphs only
         if len(text) < MIN_PARAGRAPH_LENGTH:
             continue
 
@@ -301,12 +319,7 @@ def _extract_paragraphs(section) -> list[str]:
         if _is_metadata_line(text):
             break
 
-        # Handle headings - preserve narrative ones with markdown bold
-        if element.name in ["h2", "h3", "h4"]:
-            if _is_narrative_heading(text):
-                result.append(f"**{text}**")
-        else:
-            result.append(text)
+        result.append(text)
 
     return result
 
