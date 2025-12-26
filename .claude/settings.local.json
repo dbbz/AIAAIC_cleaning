@@ -43,7 +43,9 @@
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log HEAD..upstream/main --oneline)",
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap log upstream/main --oneline -5)",
       "Bash(git -C /Users/dbbz/MyProjects/AIAAIC_scrap commit -m \"$(cat <<''EOF''\nFix Streamlit deprecation warnings\n\nReplace `use_container_width=True` with `width=''stretch''` in all 7\noccurrences. The old parameter will be removed after 2025-12-31.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(uv run python:*)"
+      "Bash(uv run python:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix description extraction for pages with single paragraphs or narrative headings\n\nThree bugs were causing short/incomplete descriptions:\n1. _has_narrative_content() required 2+ substantial paragraphs, rejecting\n   pages with one long paragraph (now accepts 1+ or >200 chars total)\n2. Length check filtered out short narrative headings like \"What happened\"\n   before they could be recognized (now handles headings first)\n3. METADATA_FIELD_PATTERNS like \"^Developer\" matched narrative text\n   (now require colons, e.g., \"^Developers*:\")\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd --min-desc-length option to rescrape short descriptions\n\nNew option for --rescrape-incomplete that also targets records with\ndescriptions shorter than N characters. Useful for re-extracting\ndescriptions that were truncated by the now-fixed extraction bugs.\n\nUsage: uv run scrape.py --rescrape-incomplete --min-desc-length 500\n\nUpdated documentation in README.md, CLAUDE.md, and CHANGELOG.md.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ]
   }
 }

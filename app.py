@@ -683,14 +683,12 @@ def page_inspect():
         "not scraped": "Not yet scraped",
         "has typos": "Has known typos",
         "complete": "Complete records",
-        # Description length buckets
-        "desc <100": "Description: Poor (<100 chars)",
-        "desc 100-250": "Description: Short (100-250)",
-        "desc 250-500": "Description: Fair (250-500)",
-        "desc 500-1k": "Description: Good (500-1k)",
-        "desc 1k-2k": "Description: Good (1k-2k)",
-        "desc >2k": "Description: Long (>2k)",
+        "description length": "Description length",
     }
+
+    # Compute description lengths upfront
+    desc_len = df["description"].apply(lambda x: len(x) if isinstance(x, str) else 0)
+    max_desc_len = int(desc_len.max()) if desc_len.max() > 0 else 1000
 
     # Filter controls
     col1, col2, col3 = st.columns([2, 2, 1])
@@ -701,11 +699,19 @@ def page_inspect():
             format_func=lambda x: filter_options[x],
         )
     with col2:
-        id_input = st.text_input("Jump to ID", placeholder="e.g. AIAAIC0001", label_visibility="visible")
+        id_input = None
+        if filter_opt == "description length":
+            len_range = st.slider(
+                "Length range",
+                min_value=0,
+                max_value=max_desc_len,
+                value=(0, max_desc_len),
+                step=50,
+            )
+        else:
+            id_input = st.text_input("Jump to ID", placeholder="e.g. AIAAIC0001", label_visibility="visible")
 
     # Apply filter
-    desc_len = df["description"].apply(lambda x: len(x) if isinstance(x, str) else 0)
-
     if filter_opt == "missing description":
         filtered = df[~has_description(df)]
     elif filter_opt == "missing sources":
@@ -720,19 +726,11 @@ def page_inspect():
         filtered = df[has_typos(df)]
     elif filter_opt == "complete":
         filtered = df[is_complete(df)]
-    # Description length buckets
-    elif filter_opt == "desc <100":
-        filtered = df[(desc_len > 0) & (desc_len < 100)]
-    elif filter_opt == "desc 100-250":
-        filtered = df[(desc_len >= 100) & (desc_len < 250)]
-    elif filter_opt == "desc 250-500":
-        filtered = df[(desc_len >= 250) & (desc_len < 500)]
-    elif filter_opt == "desc 500-1k":
-        filtered = df[(desc_len >= 500) & (desc_len < 1000)]
-    elif filter_opt == "desc 1k-2k":
-        filtered = df[(desc_len >= 1000) & (desc_len < 2000)]
-    elif filter_opt == "desc >2k":
-        filtered = df[desc_len >= 2000]
+    elif filter_opt == "description length":
+        filtered = df[(desc_len >= len_range[0]) & (desc_len <= len_range[1])]
+        # Sort by description length ascending
+        filtered = filtered.assign(_desc_len=desc_len[filtered.index])
+        filtered = filtered.sort_values("_desc_len", ascending=True).drop(columns=["_desc_len"])
     else:  # all
         filtered = df
 
@@ -741,20 +739,20 @@ def page_inspect():
     with col3:
         st.metric("Matching", len(filtered))
 
-    # Handle ID lookup
-    if id_input:
-        id_input = id_input.strip().upper()
+    # Handle ID lookup (only when not in description length mode)
+    if filter_opt != "description length" and id_input:
+        id_upper = id_input.strip().upper()
         # Check if ID exists in filtered data
-        matches = filtered[filtered["aiaaic_id"].str.upper() == id_input]
+        matches = filtered[filtered["aiaaic_id"].str.upper() == id_upper]
         if not matches.empty:
             st.session_state.inspect_idx = matches.index[0]
         else:
             # Check if ID exists in full data
-            all_matches = df[df["aiaaic_id"].str.upper() == id_input]
+            all_matches = df[df["aiaaic_id"].str.upper() == id_upper]
             if not all_matches.empty:
-                st.warning(f"ID '{id_input}' exists but doesn't match current filter. Switch to 'All records' to view it.")
+                st.warning(f"ID '{id_upper}' exists but doesn't match current filter. Switch to 'All records' to view it.")
             else:
-                st.error(f"ID '{id_input}' not found")
+                st.error(f"ID '{id_upper}' not found")
 
     if filtered.empty:
         st.success("No records match this filter")
